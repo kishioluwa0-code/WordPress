@@ -37,6 +37,7 @@ add_action('widgets_init', array('WLSM_Widget', 'register_widgets'));
 
 // Add shortcodes.
 add_shortcode('school_management_account', array('WLSM_Shortcode', 'account'));
+add_shortcode('edutech_setup_wizard', array('Edutech_Setup_Wizard', 'render'));
 add_shortcode('school_management_inquiry', array('WLSM_Shortcode', 'inquiry'));
 add_shortcode('school_management_registration', array('WLSM_Shortcode', 'registration'));
 add_shortcode('school_management_staff_registration', array('WLSM_Shortcode', 'staff_registration'));

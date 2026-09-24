@@ -26,7 +26,7 @@ while IFS= read -r -d '' file; do
   fi
 done < <(find "$PLUGIN_DIR" -type f -name '*.php' -not -path '*/includes/vendor/*' -print0)
 printf 'guarded=%s total=%s\n' "$guarded_files" "$php_files"
-expected_guarded_files=541
+expected_guarded_files=542
 if [ "$guarded_files" -ne "$expected_guarded_files" ]; then
   echo "Unexpected direct-access guard count; expected $expected_guarded_files." >&2
   exit 1
