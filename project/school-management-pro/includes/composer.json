@@ -4,11 +4,11 @@
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
-        "stripe/stripe-php": "^13.13",
-        "twilio/sdk": "^5.36",
-        "guzzlehttp/guzzle": "~6.0",
-        "firebase/php-jwt": "^6.11",
-        "kreait/firebase-php": "5.26"
+        "stripe/stripe-php": "^21.3",
+        "twilio/sdk": "^8.12",
+        "guzzlehttp/guzzle": "^7.9",
+        "firebase/php-jwt": "^7.2",
+        "kreait/firebase-php": "^8.5"
     },
     "autoload": {
         "psr-4": {

@@ -19,12 +19,11 @@ namespace Google\Cloud\Storage;
 
 use Google\Cloud\Core\Exception\NotFoundException;
 use Google\Cloud\Core\Exception\ServiceException;
-use Google\Cloud\Storage\Bucket;
 use GuzzleHttp\Psr7\CachingStream;
 
 /**
  * A streamWrapper implementation for handling `gs://bucket/path/to/file.jpg`.
- * Note that you can only open a file with mode 'r', 'rb', 'rt', 'w', 'wb', 'wt', 'a', 'ab', or 'at'.
+ * Note that you can only open a file with mode 'r', 'rb', 'rt', 'w', 'wb', 'wt', 'a', 'ab', 'at', 'x', 'xb', or 'xt'.
  *
  * See: http://php.net/manual/en/class.streamwrapper.php
  */
@@ -120,12 +119,43 @@ class StreamWrapper
     }
 
     /**
-     * Starting PHP 7.4, this is called when include/require is used on a stream.
-     * Absence of this method presents a warning.
-     * https://www.php.net/manual/en/migration74.incompatible.php
+     * This is called when include/require is used on a stream.
      */
     public function stream_set_option()
     {
+        return false;
+    }
+
+    /**
+     * This is called when touch is used on a stream. See:
+     * https://www.php.net/manual/en/streamwrapper.stream-metadata.php
+     */
+    public function stream_metadata($path, $option, $value)
+    {
+        if ($option == STREAM_META_TOUCH) {
+            $this->openPath($path);
+            return $this->touch();
+        }
+
+        return false;
+    }
+
+    /**
+     * Creates an empty file if it does not exist.
+     * @return bool Returns true if file exists or has been created, false otherwise.
+     */
+    private function touch()
+    {
+        $object = $this->bucket->object($this->file);
+        try {
+            if (!$object->exists()) {
+                $this->bucket->upload('', [
+                    'name' => $this->file
+                ]);
+            }
+            return true;
+        } catch (NotFoundException $e) {
+        }
         return false;
     }
 
@@ -181,14 +211,15 @@ class StreamWrapper
      * download the file to see if it can be opened.
      *
      * @param string $path The path of the resource to open
-     * @param string $mode The fopen mode. Currently supports ('r', 'rb', 'rt', 'w', 'wb', 'wt', 'a', 'ab', 'at')
+     * @param string $mode The fopen mode. Currently supports ('r', 'rb', 'rt',
+     *        'w', 'wb', 'wt', 'a', 'ab', 'at', 'x', 'xb', 'xt')
      * @param int $flags Bitwise options STREAM_USE_PATH|STREAM_REPORT_ERRORS|STREAM_MUST_SEEK
      * @param string $openedPath Will be set to the path on success if STREAM_USE_PATH option is set
      * @return bool
      */
     public function stream_open($path, $mode, $flags, &$openedPath)
     {
-        $client = $this->openPath($path);
+        $this->openPath($path);
 
         // strip off 'b' or 't' from the mode
         $mode = rtrim($mode, 'bt');
@@ -201,7 +232,7 @@ class StreamWrapper
             }
 
             if (isset($options['flush'])) {
-                $this->flushing = (bool)$options['flush'];
+                $this->flushing = (bool) $options['flush'];
                 unset($options['flush']);
             }
 
@@ -232,6 +263,22 @@ class StreamWrapper
                 $this->bucket->getStreamableUploader(
                     $this->stream,
                     $options + ['name' => $name]
+                )
+            );
+        } elseif ($mode == 'x') {
+            try {
+                if ($this->bucket->object($this->file)->exists()) {
+                    return $this->returnError('File already exists.', $flags);
+                }
+            } catch (ServiceException $ex) {
+                return $this->returnError($ex->getMessage(), $flags);
+            }
+
+            $this->stream = new WriteStream(null, $options);
+            $this->stream->setUploader(
+                $this->bucket->getStreamableUploader(
+                    $this->stream,
+                    $options + ['name' => $this->file, 'ifGenerationMatch' => 0]
                 )
             );
         } elseif ($mode == 'r') {
@@ -281,7 +328,7 @@ class StreamWrapper
     public function stream_write($data)
     {
         $result = $this->stream->write($data);
-        $this->dirty = $this->dirty || (bool)$result;
+        $this->dirty = $this->dirty || (bool) $result;
         return $result;
     }
 
@@ -427,7 +474,7 @@ class StreamWrapper
                     // since the service call returns nested results and we only
                     // want to yield results directly within the requested directory,
                     // check if we've already yielded this value.
-                    if ($parts[0] === "" || in_array($parts[0], $yielded)) {
+                    if ($parts[0] === '' || in_array($parts[0], $yielded)) {
                         continue;
                     }
 
@@ -720,11 +767,11 @@ class StreamWrapper
         }
 
         // equivalent to 100666 and 100444 in octal
-        $stats = array(
+        $stats = [
             'mode' => $this->bucket->isWritable()
                 ? self::FILE_WRITABLE_MODE
                 : self::FILE_READABLE_MODE
-        );
+        ];
         $this->statsFromFileInfo($info, $stats);
         return $this->makeStatArray($stats);
     }

@@ -15,6 +15,7 @@ composer check-platform-reqs --working-dir="$COMPOSER_DIR" --no-dev
 
 test -s "$COMPOSER_DIR/vendor/autoload.php"
 php "$ROOT_DIR/tests/jwt-compat.php"
+php "$ROOT_DIR/tests/dependency-compatibility.php"
 php "$ROOT_DIR/tests/feature-flags.php"
 php "$ROOT_DIR/tests/portal-wrapper.php"
 php "$ROOT_DIR/tests/auth.php"
