@@ -34,6 +34,7 @@ if ( ! defined( 'EDUTECH_DB_VERSION' ) ) {
 }
 
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-environment.php';
+require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-installation-health.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-migrations.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-modules.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-features.php';
@@ -63,6 +64,7 @@ final class WLSM_School_Management {
 
 		private function initialize_hooks() {
 			require_once WLSM_PLUGIN_DIR_PATH . 'includes/helpers/WLSM_Brand.php';
+			Edutech_Installation_Health::boot();
 			Edutech_Auth::boot();
 			Edutech_Admin_Restriction::boot();
 			Edutech_Context::boot();
@@ -85,9 +87,10 @@ final class WLSM_School_Management {
 			add_action( 'init', array( 'Edutech_Modules', 'boot' ), 2 );
 		}
 
-	private function setup_database() {
-		require_once WLSM_PLUGIN_DIR_PATH . 'admin/inc/WLSM_Database.php';
-		register_activation_hook( __FILE__, array( 'WLSM_Database', 'activation' ) );
+		private function setup_database() {
+			require_once WLSM_PLUGIN_DIR_PATH . 'admin/inc/WLSM_Database.php';
+			register_activation_hook( __FILE__, array( 'WLSM_Database', 'activation' ) );
+			register_activation_hook( __FILE__, array( 'Edutech_Installation_Health', 'activate' ) );
 		register_deactivation_hook( __FILE__, array( 'WLSM_Database', 'deactivation' ) );
 		register_uninstall_hook( __FILE__, array( 'WLSM_Database', 'uninstall' ) );
 	}
