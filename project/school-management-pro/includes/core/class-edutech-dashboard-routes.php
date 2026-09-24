@@ -34,13 +34,9 @@ if ( ! class_exists( 'Edutech_Dashboard_Routes' ) ) {
 			$context = is_array( $context ) ? $context : ( class_exists( 'Edutech_Identity' ) ? Edutech_Identity::current() : array() );
 			$route   = self::normalize( $route );
 			$definition = self::definitions()[ $route ];
-			if ( empty( $context['is_authenticated'] ) || empty( $context['role'] ) || ! in_array( $context['role'], $definition['roles'], true ) ) {
-				return false;
-			}
-			if ( ! empty( $definition['capability'] ) && empty( $context['permissions'][ $definition['capability'] ] ) && 'school_admin' !== $context['role'] ) {
-				return false;
-			}
-			return true;
+			return class_exists( 'Edutech_Policy' )
+				? Edutech_Policy::can_route( $route, $context )
+				: ( ! empty( $context['is_authenticated'] ) && ! empty( $context['role'] ) && in_array( $context['role'], $definition['roles'], true ) );
 		}
 
 		/** @param string $route @param string $base_url @param array<string, mixed>|null $context @return string */
