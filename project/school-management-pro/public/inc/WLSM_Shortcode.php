@@ -170,6 +170,9 @@ class WLSM_Shortcode {
 		wp_localize_script( 'wlsm-public', 'wlsmbloodgrouplist', WLSM_Helper::blood_group_list() );
 		wp_localize_script( 'wlsm-public', 'edutechIdentity', Edutech_Identity::frontend() );
 		wp_localize_script( 'wlsm-public', 'edutechDashboard', Edutech_Dashboard_Routes::frontend() );
+		if ( class_exists( 'Edutech_Context' ) ) {
+			wp_localize_script( 'wlsm-public', 'edutechContext', Edutech_Context::current() );
+		}
 
 		wp_localize_script( 'wlsm-public', 'wlsmajaxurl', admin_url( 'admin-ajax.php' ) );
 		wp_localize_script( 'wlsm-public', 'wlsmadminurl', admin_url() );

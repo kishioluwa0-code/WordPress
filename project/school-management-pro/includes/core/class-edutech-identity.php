@@ -103,6 +103,16 @@ if ( ! class_exists( 'Edutech_Identity' ) ) {
 			);
 		}
 
+		/** @param int $user_id User ID; clear all cached contexts when omitted. @return void */
+		public static function flush( $user_id = 0 ) {
+			$user_id = absint( $user_id );
+			if ( $user_id ) {
+				unset( self::$contexts[ $user_id ] );
+				return;
+			}
+			self::$contexts = array();
+		}
+
 		/** @param array<string> $roles @param array<string, mixed> $staff @param bool $is_student @param bool $is_parent */
 		private static function resolve_role( $roles, $staff, $is_student, $is_parent ) {
 			if ( in_array( 'designer', $roles, true ) || in_array( 'edutech_designer', $roles, true ) ) {
