@@ -46,10 +46,8 @@ jobs:
         run: bash tests/security-scan.sh
 
       - name: Audit Composer dependencies
-        id: audit
         working-directory: project/school-management-pro/includes
-        continue-on-error: true
-        run: composer audit --no-dev --format=plain | tee "$GITHUB_WORKSPACE/composer-audit-ci.txt"
+        run: composer audit --locked --no-dev --format=plain | tee "$GITHUB_WORKSPACE/composer-audit-ci.txt"
 
       - name: Upload dependency audit report
         if: always()

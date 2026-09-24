@@ -1,0 +1,167 @@
+name: Edutech v1.0 Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [development, staging, production]
+  push:
+    branches: [develop]
+    tags: ['v*-rc*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edutech-deploy-${{ github.event.inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'staging' || 'development') }}
+  cancel-in-progress: false
+
+env:
+  PHP_VERSION: '8.3'
+
+jobs:
+  validate:
+    name: Validate and audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: curl, mbstring, mysql, xml, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Install security-scan tools
+        run: sudo apt-get update && sudo apt-get install --yes ripgrep
+
+      - name: Install locked dependencies
+        working-directory: project/school-management-pro/includes
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+
+      - name: Run smoke tests
+        run: bash tests/smoke-test.sh
+
+      - name: Run static security scan
+        run: bash tests/security-scan.sh
+
+      - name: Run live Composer advisory audit
+        working-directory: project/school-management-pro/includes
+        run: composer audit --locked --no-dev --format=plain
+
+      - name: Build release package
+        run: bash build-edutech-plugin.sh
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: edutech-v1.0.0-${{ github.sha }}
+          path: |
+            release/edutech-v1.0.0.zip
+            release/edutech-v1.0.0.zip.sha256
+          if-no-files-found: error
+
+  deploy-development:
+    name: Deploy development
+    needs: validate
+    if: github.event.inputs.environment == 'development' || (github.event_name == 'push' && github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+          coverage: none
+      - name: Validate Firebase secret shape
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: python3 -c 'import json, os; d=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT_JSON"]); assert d["project_id"] == "edutech-dev-95323"; assert d["type"] == "service_account"'
+      - name: Deploy over SSH
+        env:
+          EDUTECH_ENVIRONMENT: development
+          DEPLOY_MODE: ssh
+          WP_DEPLOY_HOST: ${{ secrets.WP_DEPLOY_HOST }}
+          WP_DEPLOY_USER: ${{ secrets.WP_DEPLOY_USER }}
+          WP_DEPLOY_PATH: ${{ secrets.WP_DEPLOY_PATH }}
+          WP_DEPLOY_SSH_KEY: ${{ secrets.WP_DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$WP_DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+          chmod 600 "$RUNNER_TEMP/deploy_key"
+          SSH_KEY_FILE="$RUNNER_TEMP/deploy_key" scripts/deploy-edutech.sh
+
+  deploy-staging:
+    name: Deploy staging
+    needs: validate
+    if: github.event.inputs.environment == 'staging' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && contains(github.ref, '-rc'))
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+          coverage: none
+      - name: Validate Firebase secret shape
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: python3 -c 'import json, os; d=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT_JSON"]); assert d["project_id"] == "edutech-staging-150ec"; assert d["type"] == "service_account"'
+      - name: Deploy over SSH
+        env:
+          EDUTECH_ENVIRONMENT: staging
+          DEPLOY_MODE: ssh
+          WP_DEPLOY_HOST: ${{ secrets.WP_DEPLOY_HOST }}
+          WP_DEPLOY_USER: ${{ secrets.WP_DEPLOY_USER }}
+          WP_DEPLOY_PATH: ${{ secrets.WP_DEPLOY_PATH }}
+          WP_DEPLOY_SSH_KEY: ${{ secrets.WP_DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$WP_DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+          chmod 600 "$RUNNER_TEMP/deploy_key"
+          SSH_KEY_FILE="$RUNNER_TEMP/deploy_key" scripts/deploy-edutech.sh
+
+  deploy-production:
+    name: Deploy production
+    needs: validate
+    if: github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          tools: composer:v2
+          coverage: none
+      - name: Validate Firebase secret shape
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: python3 -c 'import json, os; d=json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT_JSON"]); assert d["project_id"] == "edutech-staging-20d90"; assert d["type"] == "service_account"'
+      - name: Deploy over SSH
+        env:
+          EDUTECH_ENVIRONMENT: production
+          DEPLOY_MODE: ssh
+          WP_DEPLOY_HOST: ${{ secrets.WP_DEPLOY_HOST }}
+          WP_DEPLOY_USER: ${{ secrets.WP_DEPLOY_USER }}
+          WP_DEPLOY_PATH: ${{ secrets.WP_DEPLOY_PATH }}
+          WP_DEPLOY_SSH_KEY: ${{ secrets.WP_DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$WP_DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
+          chmod 600 "$RUNNER_TEMP/deploy_key"
+          SSH_KEY_FILE="$RUNNER_TEMP/deploy_key" scripts/deploy-edutech.sh
