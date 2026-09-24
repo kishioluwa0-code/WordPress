@@ -20,17 +20,17 @@ namespace Google\Cloud\Core;
 use Google\Auth\FetchAuthTokenCache;
 use Google\Auth\FetchAuthTokenInterface;
 use Google\Auth\GetQuotaProjectInterface;
+use Google\Auth\GetUniverseDomainInterface;
 use Google\Auth\HttpHandler\Guzzle6HttpHandler;
 use Google\Auth\HttpHandler\HttpHandlerFactory;
 use Google\Auth\UpdateMetadataInterface;
+use Google\Cloud\Core\Exception\GoogleException;
 use Google\Cloud\Core\Exception\ServiceException;
-use Google\Cloud\Core\RequestWrapperTrait;
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\Psr7\Utils;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\StreamInterface;
 
 /**
  * The RequestWrapper is responsible for delivering and signing requests.
@@ -84,6 +84,12 @@ class RequestWrapper
     private $retryFunction;
 
     /**
+     * @var callable|null Lets the user listen for retries and
+     * modify the next retry arguments
+     */
+    private $retryListener;
+
+    /**
      * @var callable Executes a delay.
      */
     private $delayFunction;
@@ -93,6 +99,16 @@ class RequestWrapper
      * between attempts to retry.
      */
     private $calcDelayFunction;
+
+    /**
+     * @var string The universe domain to verify against the credentials.
+     */
+    private string $universeDomain;
+
+    /**
+     * @var bool Ensure we only check the universe domain once.
+     */
+    private bool $hasCheckedUniverse = false;
 
     /**
      * @param array $config [optional] {
@@ -125,6 +141,9 @@ class RequestWrapper
      *     @type callable $restCalcDelayFunction Sets the conditions for
      *           determining how long to wait between attempts to retry. Function
      *           signature should match: `function (int $attempt) : int`.
+     *     @type string $universeDomain The expected universe of the credentials. Defaults to "googleapis.com".
+     *     @type callable $restRetryListener A function to run custom logic between retries. This function can modify
+     *           the next server call arguments for the next retry.
      * }
      */
     public function __construct(array $config = [])
@@ -140,7 +159,9 @@ class RequestWrapper
             'componentVersion' => null,
             'restRetryFunction' => null,
             'restDelayFunction' => null,
-            'restCalcDelayFunction' => null
+            'restRetryListener' => null,
+            'restCalcDelayFunction' => null,
+            'universeDomain' => GetUniverseDomainInterface::DEFAULT_UNIVERSE_DOMAIN,
         ];
 
         $this->componentVersion = $config['componentVersion'];
@@ -148,6 +169,7 @@ class RequestWrapper
         $this->restOptions = $config['restOptions'];
         $this->shouldSignRequest = $config['shouldSignRequest'];
         $this->retryFunction = $config['restRetryFunction'] ?: $this->getRetryFunction();
+        $this->retryListener = $config['restRetryListener'];
         $this->delayFunction = $config['restDelayFunction'] ?: function ($delay) {
             usleep($delay);
         };
@@ -155,6 +177,7 @@ class RequestWrapper
         $this->httpHandler = $config['httpHandler'] ?: HttpHandlerFactory::build();
         $this->authHttpHandler = $config['authHttpHandler'] ?: $this->httpHandler;
         $this->asyncHttpHandler = $config['asyncHttpHandler'] ?: $this->buildDefaultAsyncHandler();
+        $this->universeDomain = $config['universeDomain'];
 
         if ($this->credentialsFetcher instanceof AnonymousCredentials) {
             $this->shouldSignRequest = false;
@@ -313,9 +336,14 @@ class RequestWrapper
             $quotaProject = $this->quotaProject;
 
             if ($this->accessToken) {
+                // if an access token is provided, check the universe domain against "googleapis.com"
+                $this->checkUniverseDomain(null);
                 $request = $request->withHeader('authorization', 'Bearer ' . $this->accessToken);
             } else {
+                // if a credentials fetcher is provided, check the universe domain against the
+                // credential's universe domain
                 $credentialsFetcher = $this->getCredentialsFetcher();
+                $this->checkUniverseDomain($credentialsFetcher);
                 $request = $this->addAuthHeaders($request, $credentialsFetcher);
 
                 if ($credentialsFetcher instanceof GetQuotaProjectInterface) {
@@ -326,6 +354,9 @@ class RequestWrapper
             if ($quotaProject) {
                 $request = $request->withHeader('X-Goog-User-Project', $quotaProject);
             }
+        } else {
+            // If we are not signing the request, check the universe domain against "googleapis.com"
+            $this->checkUniverseDomain(null);
         }
 
         return $request;
@@ -341,13 +372,14 @@ class RequestWrapper
      */
     private function addAuthHeaders(RequestInterface $request, FetchAuthTokenInterface $fetcher)
     {
-        $backoff = new ExponentialBackoff($this->retries, $this->getRetryFunction());
+        $backoff = new ExponentialBackoff($this->retries, $this->getRetryFunction(), $this->retryListener);
 
         try {
             return $backoff->execute(
                 function () use ($request, $fetcher) {
                     if (!$fetcher instanceof UpdateMetadataInterface ||
-                         ($fetcher instanceof FetchAuthTokenCache &&
+                         (
+                             $fetcher instanceof FetchAuthTokenCache &&
                             !$fetcher->getFetcher() instanceof UpdateMetadataInterface
                          )
                     ) {
@@ -421,7 +453,9 @@ class RequestWrapper
      */
     private function getExceptionMessage(\Exception $ex)
     {
-        if ($ex instanceof RequestException && $ex->hasResponse()) {
+        // Guzzle 7 carries the response on RequestException, Guzzle 8 only on
+        // its ResponseException subclass, hence the method_exists() check.
+        if ($ex instanceof RequestException && method_exists($ex, 'getResponse') && $ex->getResponse()) {
             return (string) $ex->getResponse()->getBody();
         }
 
@@ -463,7 +497,7 @@ class RequestWrapper
                 : $this->retryFunction,
             'retryListener' => isset($options['restRetryListener'])
                 ? $options['restRetryListener']
-                : null,
+                : $this->retryListener,
             'delayFunction' => isset($options['restDelayFunction'])
                 ? $options['restDelayFunction']
                 : $this->delayFunction,
@@ -483,5 +517,37 @@ class RequestWrapper
         return $this->httpHandler instanceof Guzzle6HttpHandler
             ? [$this->httpHandler, 'async']
             : [HttpHandlerFactory::build(), 'async'];
+    }
+
+    /**
+     * Verify that the expected universe domain matches the universe domain from the credentials.
+     */
+    private function checkUniverseDomain(?FetchAuthTokenInterface $credentialsFetcher = null)
+    {
+        if (false === $this->hasCheckedUniverse) {
+            if ($this->universeDomain === '') {
+                throw new GoogleException('The universe domain cannot be empty.');
+            }
+            if (is_null($credentialsFetcher)) {
+                if ($this->universeDomain !== GetUniverseDomainInterface::DEFAULT_UNIVERSE_DOMAIN) {
+                    throw new GoogleException(sprintf(
+                        'The accessToken option is not supported outside of the default universe domain (%s).',
+                        GetUniverseDomainInterface::DEFAULT_UNIVERSE_DOMAIN
+                    ));
+                }
+            } else {
+                $credentialsUniverse = $credentialsFetcher instanceof GetUniverseDomainInterface
+                    ? $credentialsFetcher->getUniverseDomain()
+                    : GetUniverseDomainInterface::DEFAULT_UNIVERSE_DOMAIN;
+                if ($credentialsUniverse !== $this->universeDomain) {
+                    throw new GoogleException(sprintf(
+                        'The configured universe domain (%s) does not match the credential universe domain (%s)',
+                        $this->universeDomain,
+                        $credentialsUniverse
+                    ));
+                }
+            }
+            $this->hasCheckedUniverse = true;
+        }
     }
 }

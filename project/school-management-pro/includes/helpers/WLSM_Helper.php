@@ -209,7 +209,8 @@ class WLSM_Helper {
 		try {
 			$factory = (new \Kreait\Firebase\Factory())->withServiceAccount($json_file_path);
 			$messaging = $factory->createMessaging();
-			$message = \Kreait\Firebase\Messaging\CloudMessage::withTarget('token', $token)
+			$message = \Kreait\Firebase\Messaging\CloudMessage::new()
+				->toToken($token)
 				->withNotification([
 					'title' => $title,
 					'body' => $body,

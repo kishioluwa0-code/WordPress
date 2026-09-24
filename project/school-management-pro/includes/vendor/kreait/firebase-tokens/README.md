@@ -4,20 +4,33 @@ A library to work with [Google Firebase](https://firebase.google.com) tokens. Yo
 [create custom tokens](https://firebase.google.com/docs/auth/admin/create-custom-tokens) and 
 [verify ID Tokens](https://firebase.google.com/docs/auth/admin/verify-id-tokens).
 
-Achieve more with the [Firebase Admin SDK](https://github.com/kreait/firebase-php) for PHP (which uses this library).
+Achieve more with the [Firebase Admin SDK](https://packagist.org/packages/kreait/firebase-php) for PHP (which uses this library).
 
-[![Current version](https://img.shields.io/packagist/v/kreait/firebase-tokens.svg)](https://packagist.org/packages/kreait/firebase-tokens)
+[![Current version](https://img.shields.io/packagist/v/kreait/firebase-tokens.svg?logo=composer)](https://packagist.org/packages/kreait/firebase-tokens)
 [![Supported PHP version](https://img.shields.io/packagist/php-v/kreait/firebase-tokens.svg)]()
 [![Monthly Downloads](https://img.shields.io/packagist/dm/kreait/firebase-tokens.svg)](https://packagist.org/packages/kreait/firebase-tokens/stats)
 [![Total Downloads](https://img.shields.io/packagist/dt/kreait/firebase-tokens.svg)](https://packagist.org/packages/kreait/firebase-tokens/stats)
-[![Tests](https://github.com/kreait/firebase-tokens-php/workflows/Tests/badge.svg)](https://github.com/kreait/firebase-tokens-php/actions)
-[![Discord](https://img.shields.io/discord/807679292573220925.svg?color=7289da&logo=discord)](https://discord.gg/Yacm7unBsr)
+[![Tests](https://github.com/beste/firebase-tokens-php/workflows/Tests/badge.svg)](https://github.com/beste/firebase-tokens-php/actions)
 [![Sponsor](https://img.shields.io/static/v1?logo=GitHub&label=Sponsor&message=%E2%9D%A4&color=ff69b4)](https://github.com/sponsors/jeromegamez)
+
+
+> [!IMPORTANT]
+> **Support the project:** This library is downloaded 1M+ times monthly and powers thousands of applications.
+> If it saves you or your team time, please consider
+> [sponsoring its development](https://github.com/sponsors/jeromegamez).
+
+> [!NOTE]
+> The project moved from the `kreait` to the `beste` GitHub Organization in January 2026.
+> The namespace remains `Kreait\Firebase\JWT` and the package name remains `kreait/firebase-tokens`.
+> Please update your remote URL if you have forked or cloned the repository.
+
+---
 
 - [Installation](#installation)
 - [Simple Usage](#simple-usage)
   - [Create a custom token](#create-a-custom-token)
   - [Verify an ID token](#verify-an-id-token)
+  - [Verify a Session Cookie](#verify-a-session-cookie)
   - [Tokens](#tokens)
   - [Tenant Awareness](#tenant-awareness) 
 - [Advanced Usage](#advanced-usage)
@@ -86,9 +99,44 @@ try {
 }
 ```
 
+### Verify a Session Cookie
+
+Session cookie verification is similar to ID Token verification.
+
+See [Manage Session Cookies](https://firebase.google.com/docs/auth/admin/manage-cookies) for more information.
+
+```php
+<?php
+
+use Kreait\Firebase\JWT\Error\SessionCookieVerificationFailed;
+use Kreait\Firebase\JWT\SessionCookieVerifier;
+
+$projectId = '...';
+$sessionCookie = 'eyJhb...'; // A session cookie given to your backend by a Client application
+
+$verifier = SessionCookieVerifier::createWithProjectId($projectId);
+
+try {
+    $token = $verifier->verifySessionCookie($sessionCookie);
+} catch (SessionCookieVerificationFailed $e) {
+    echo $e->getMessage();
+    // Example Output:
+    // The value 'eyJhb...' is not a verified ID token:
+    // - The token is expired.
+    exit;
+}
+
+try {
+    $token = $verifier->verifySessionCookieWithLeeway($sessionCookie, $leewayInSeconds = 10000000);
+} catch (SessionCookieVerificationFailed $e) {
+    print $e->getMessage();
+    exit;
+}
+```
+
 ### Tokens
 
-Tokens returned from the Generator and Verifier are instances of `Kreait\Firebase\JWT\Token` and
+Tokens returned from the Generator and Verifier are instances of `\Kreait\Firebase\JWT\Contract\Token` and
 represent a [JWT](https://jwt.io/). The displayed outputs are examples and vary depending on
 the information associated with the given user in your project's auth database.
 
@@ -167,6 +215,7 @@ $verifier = IdTokenVerifier::createWithProjectId('my-project-id');
 $tenantAwareVerifier = $verifier->withExpectedTenantId('my-tenant-id');
 ```
 
+Session cookies currently don't support tenants.
 
 ## Advanced usage
 
@@ -184,9 +233,9 @@ Here's an example using the [Symfony Cache Component](https://symfony.com/doc/cu
 
 ```php
 use Kreait\Firebase\JWT\IdTokenVerifier;
-use Symfony\Component\Cache\Simple\FilesystemCache;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 
-$cache = new FilesystemCache();
+$cache = new FilesystemAdapter();
 
 $verifier = IdTokenVerifier::createWithProjectIdAndCache($projectId, $cache);
 ```
