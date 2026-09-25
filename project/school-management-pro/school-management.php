@@ -46,6 +46,7 @@ require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-policy.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-admin-restriction.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-context.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-dashboard-routes.php';
+require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-dashboard-shell.php';
 require_once WLSM_PLUGIN_DIR_PATH . 'includes/core/class-edutech-setup-wizard.php';
 
 final class WLSM_School_Management {

@@ -197,8 +197,9 @@ if (! is_user_logged_in()) {
 	$logout_url = wp_logout_url($logout_redirect_url);
 	$current_user = wp_get_current_user();
 
-?>
-	<div class="wlsm-logged-in-info">
+	?>
+		<?php if ( class_exists( 'Edutech_Dashboard_Shell' ) ) { Edutech_Dashboard_Shell::open(); } ?>
+		<div class="wlsm-logged-in-info">
 		<?php $edutech_dashboard = class_exists( 'Edutech_Dashboard_Routes' ) ? Edutech_Dashboard_Routes::frontend() : array( 'activeRoute' => '' ); ?>
 		<div class="edutech-dashboard-context" data-edutech-role="<?php echo esc_attr( Edutech_Identity::current()['role'] ?? 'unknown' ); ?>" data-edutech-route="<?php echo esc_attr( $edutech_dashboard['activeRoute'] ?? '' ); ?>" hidden></div>
 		<span class="wlsm-logged-in-text"><?php echo esc_html(ucwords($current_user->user_login)) ?>
@@ -231,4 +232,5 @@ if (! is_user_logged_in()) {
 			require_once WLSM_PLUGIN_DIR_PATH . 'public/inc/account/no_record.php';
 		}
 	}
+	if ( class_exists( 'Edutech_Dashboard_Shell' ) ) { Edutech_Dashboard_Shell::close(); }
 }

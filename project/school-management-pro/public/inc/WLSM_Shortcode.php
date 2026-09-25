@@ -148,6 +148,12 @@ class WLSM_Shortcode {
 			array(),
 			defined( 'EDUTECH_VERSION' ) ? EDUTECH_VERSION : '1.0.0'
 		);
+		wp_enqueue_style(
+			'edutech-control-center',
+			WLSM_PLUGIN_URL . 'assets/css/edutech-control-center.css',
+			array( 'edutech-design-system' ),
+			defined( 'EDUTECH_VERSION' ) ? EDUTECH_VERSION : '1.0.0'
+		);
 
 		wp_enqueue_style( 'jquery-confirm', WLSM_PLUGIN_URL . 'assets/css/jquery-confirm.min.css' );
 		wp_enqueue_style( 'toastr', WLSM_PLUGIN_URL . 'assets/css/toastr.min.css' );
