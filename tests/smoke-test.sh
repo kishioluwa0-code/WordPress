@@ -51,6 +51,8 @@ grep -q 'class Edutech_Modules' "$PLUGIN_DIR/includes/core/class-edutech-modules
 grep -q 'class Edutech_Features' "$PLUGIN_DIR/includes/core/class-edutech-features.php"
 grep -q 'class Edutech_Portal' "$PLUGIN_DIR/includes/core/class-edutech-portal.php"
 grep -q 'class Edutech_Portal_Pages' "$PLUGIN_DIR/includes/core/class-edutech-portal-pages.php"
+grep -q 'function regenerate_missing' "$PLUGIN_DIR/includes/core/class-edutech-portal-pages.php"
+grep -q 'function assignment_report' "$PLUGIN_DIR/includes/core/class-edutech-portal-pages.php"
 grep -q 'class Edutech_Auth' "$PLUGIN_DIR/includes/core/class-edutech-auth.php"
 grep -q 'class Edutech_Identity' "$PLUGIN_DIR/includes/core/class-edutech-identity.php"
 grep -q 'class Edutech_Policy' "$PLUGIN_DIR/includes/core/class-edutech-policy.php"
